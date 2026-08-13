@@ -1,0 +1,6 @@
+{
+  "name": "TrulyTrue",
+  "description": "TrulyTrue - Consumer Trust Intelligence Platform. Truth You Can Trust. Instantly check suspicious messages, links, phone numbers, emails, screenshots, and UPI IDs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
