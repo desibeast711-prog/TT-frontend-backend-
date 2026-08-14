@@ -323,15 +323,25 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onReset, onRepor
                     onChange={(e) => setReportCategory(e.target.value as ScamCategory)}
                     className="w-full bg-neutral-800 border border-neutral-700 text-white rounded-xl px-3 py-2.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-white"
                   >
-                    <option value="UPI Scam">UPI Scam / Fake Payment</option>
-                    <option value="Bank Fraud">Bank Fraud / Spoofed Caller</option>
-                    <option value="Phishing">Phishing Link / Credential Theft</option>
-                    <option value="Fake Customer Support">Fake Customer Support / Telecom</option>
-                    <option value="Digital Arrest">Digital Arrest / Coercion</option>
-                    <option value="Investment Scam">Investment / Crypto Scam</option>
-                    <option value="Job Scam">Fake Job Offer / Work from Home</option>
-                    <option value="Delivery Scam">Courier / Package Delivery Scam</option>
-                    <option value="Other">Other Reported Activity</option>
+                    <option value="Digital Arrest / Coercion">Digital Arrest / Law Enforcement Coercion</option>
+                    <option value="Part-time Job & Task Fraud">Part-time Job & Telegram Task Fraud</option>
+                    <option value="Electricity Bill Disconnection">Electricity Bill Disconnection Threat</option>
+                    <option value="FedEx / Customs Courier Scam">FedEx / Customs Courier Seizure Scam</option>
+                    <option value="Stock Trading & IPO Fraud">Stock Trading & IPO Investment Fraud</option>
+                    <option value="APK Malware & Trojan Download">APK Malware / Remote Access Trojan</option>
+                    <option value="Bank Fraud & Spoofed Calls">Bank Fraud / Spoofed Helpline Call</option>
+                    <option value="UPI & Payment Fraud">UPI Fraud / Reverse Payment / QR Scan</option>
+                    <option value="Fake Customer Support">Fake Customer Support / Helpline</option>
+                    <option value="Phishing & Credential Theft">Phishing Link / Credential Harvesting</option>
+                    <option value="Loan App Extortion">Instant Loan App Extortion & Blackmail</option>
+                    <option value="Aadhaar, AEPS & KYC Fraud">Aadhaar / PAN / Bank KYC Freeze Threat</option>
+                    <option value="Investment & Crypto Scam">Investment & Crypto Scheme</option>
+                    <option value="Lottery & KBC Reward Scam">Lottery & KBC Reward Scam</option>
+                    <option value="Marketplace & OLX Fraud">Marketplace & OLX Army Personnel Scam</option>
+                    <option value="Romance & Pig Butchering">Romance Scam / Pig Butchering</option>
+                    <option value="AI Voice Cloning Fraud">AI Voice Cloning Emergency Scam</option>
+                    <option value="Identity Theft & Impersonation">Social Media Account Impersonation</option>
+                    <option value="Other Emerging Fraud">Other Emerging Fraud Tactic</option>
                   </select>
                 </div>
 
@@ -383,7 +393,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onReset, onRepor
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5" />
-                      <span>SUBMIT REPORT TO SUPABASE</span>
+                      <span>Report</span>
                     </>
                   )}
                 </button>
@@ -544,7 +554,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onReset, onRepor
               className="flex-1 sm:flex-initial bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <Flag className="w-4 h-4" />
-              <span>{showQuickReport ? 'CLOSE FORM' : 'REPORT IDENTIFIER'}</span>
+              <span>{showQuickReport ? 'CLOSE FORM' : 'REPORT'}</span>
             </button>
 
             <button
