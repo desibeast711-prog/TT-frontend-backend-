@@ -1,6 +1,6 @@
 export type CheckType = 'text' | 'screenshot' | 'url' | 'phone' | 'email' | 'upi' | 'social';
 
-export type RiskStatus = 'SAFE' | 'SUSPICIOUS' | 'LIKELY_SCAM';
+export type RiskStatus = 'NOT_REPORTED' | 'REPORTED' | 'REPORTED_HIGH_RISK' | 'SAFE' | 'SUSPICIOUS' | 'LIKELY_SCAM';
 
 export type ScamCategory =
   | 'Bank Fraud'
@@ -32,14 +32,21 @@ export type ScamCategory =
   | 'Romance & Impersonation'
   | 'Malicious Link / URL'
   | 'Lottery & Reward Scam'
-  | 'Safe Communication'
+  | 'No Community Reports'
   | 'Other';
 
-export type CommunityReportStatus = 
-  | 'Community Report' 
-  | 'Under Review' 
-  | 'Verified' 
-  | 'Disputed' 
+export type CommunityReportLifecycle = 
+  | 'NEW'
+  | 'community_report'
+  | 'Community Report'
+  | 'UNDER_REVIEW'
+  | 'Under Review'
+  | 'SUPPORTED'
+  | 'CORROBORATED'
+  | 'RESOLVED'
+  | 'DISPUTED'
+  | 'Disputed'
+  | 'REMOVED'
   | 'Removed';
 
 export interface PhoneIntelligenceData {
@@ -69,6 +76,8 @@ export interface AnalysisResult {
   communityReportCount: number;
   createdAt: string;
   phoneData?: PhoneIntelligenceData;
+  isDisputed?: boolean;
+  isCompromised?: boolean;
 }
 
 export interface CommunityReport {
@@ -77,7 +86,7 @@ export interface CommunityReport {
   targetValue: string;
   category: ScamCategory;
   description: string;
-  status: CommunityReportStatus;
+  status: CommunityReportLifecycle;
   reportedAt: string;
   region: {
     country: string;
@@ -86,6 +95,9 @@ export interface CommunityReport {
   };
   upvotes: number;
   hasEvidence: boolean;
+  ownerDisputed?: boolean;
+  ownerResponse?: string;
+  isCompromised?: boolean;
 }
 
 export interface GeoScamData {
@@ -112,7 +124,27 @@ export interface ReportSubmissionPayload {
   category: ScamCategory;
   whatHappened: string;
   approximateRegion: string;
+  district?: string;
+  state?: string;
+  country?: string;
+  incidentDate?: string;
+  transactionDetails?: string;
   evidenceFileName?: string;
+}
+
+export interface IdentifierClaimPayload {
+  targetType: CheckType;
+  targetValue: string;
+  disputeReason: string;
+  contactEmail?: string;
+}
+
+export interface AccountCompromisePayload {
+  targetType: CheckType;
+  targetValue: string;
+  compromisedFrom?: string;
+  compromisedUntil?: string;
+  description: string;
 }
 
 export interface UserProfile {

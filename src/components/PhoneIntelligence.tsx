@@ -7,6 +7,8 @@ interface PhoneIntelligenceProps {
 }
 
 export const PhoneIntelligence: React.FC<PhoneIntelligenceProps> = ({ phoneData }) => {
+  const isClean = (phoneData.communityReportCount || 0) === 0;
+
   return (
     <div className="bg-neutral-900 text-white rounded-2xl p-6 sm:p-8 space-y-6 shadow-xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-neutral-800">
@@ -21,12 +23,16 @@ export const PhoneIntelligence: React.FC<PhoneIntelligenceProps> = ({ phoneData 
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="bg-red-500/20 border border-red-500/40 text-red-400 font-extrabold text-sm px-4 py-2 rounded-xl flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400" />
-            <span>{(phoneData?.riskStatus || 'SUSPICIOUS').replace('_', ' ')}</span>
+          <div className={`font-extrabold text-sm px-4 py-2 rounded-xl flex items-center gap-2 border ${
+            isClean
+              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+              : 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+          }`}>
+            <AlertCircle className={`w-4 h-4 ${isClean ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span>{isClean ? 'NOT REPORTED' : (phoneData?.riskStatus || 'SUSPICIOUS').replace('_', ' ')}</span>
           </div>
           <div className="bg-neutral-800 border border-neutral-700 text-white font-bold text-sm px-4 py-2 rounded-xl">
-            {phoneData.riskScore} / 100 Risk
+            {isClean ? 0 : phoneData.riskScore} / 100 Risk
           </div>
         </div>
       </div>
@@ -42,8 +48,12 @@ export const PhoneIntelligence: React.FC<PhoneIntelligenceProps> = ({ phoneData 
             <p className="text-xs text-neutral-400 font-semibold">Community Incident Reports</p>
           </div>
         </div>
-        <span className="text-xs font-medium text-emerald-400 bg-emerald-950/80 border border-emerald-800/60 px-3 py-1 rounded-full">
-          Active Threat Pattern
+        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+          isClean 
+            ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800/60'
+            : 'text-amber-400 bg-amber-950/80 border-amber-800/60'
+        }`}>
+          {isClean ? 'Zero Registered Reports' : 'Community Reported Target'}
         </span>
       </div>
 
@@ -56,14 +66,18 @@ export const PhoneIntelligence: React.FC<PhoneIntelligenceProps> = ({ phoneData 
             <span>Most Reported Scam Types</span>
           </h4>
           <div className="space-y-3">
-            {(phoneData?.topCategories || []).map((cat, idx) => (
-              <div key={idx} className="flex items-center justify-between text-sm">
-                <span className="font-semibold text-neutral-200">{cat.category}</span>
-                <span className="font-bold text-neutral-400 bg-neutral-800 px-2.5 py-0.5 rounded-md text-xs">
-                  {cat.count} reports
-                </span>
-              </div>
-            ))}
+            {(!phoneData?.topCategories || phoneData.topCategories.length === 0 || isClean) ? (
+              <p className="text-xs text-neutral-400 italic">No community scam categories reported for this number.</p>
+            ) : (
+              phoneData.topCategories.map((cat, idx) => (
+                <div key={idx} className="flex items-center justify-between text-sm">
+                  <span className="font-semibold text-neutral-200">{cat.category}</span>
+                  <span className="font-bold text-neutral-400 bg-neutral-800 px-2.5 py-0.5 rounded-md text-xs">
+                    {cat.count} reports
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

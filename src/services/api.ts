@@ -53,67 +53,55 @@ function generateFallbackAnalysis(type: CheckType, query: string): AnalysisResul
     qLower.includes('urgent') ||
     qLower.includes('disconnect') ||
     qLower.includes('electricity') ||
-    qLower.includes('otp') && qLower.includes('share') ||
+    (qLower.includes('otp') && qLower.includes('share')) ||
     qLower.includes('customs') ||
-    qLower.includes('top/track') ||
-    qLower.includes('98765') ||
     qLower.includes('.xyz') ||
-    qLower.includes('.top') ||
+    qLower.includes('digital arrest') ||
     qLower.includes('ybl') ||
     qLower.includes('crypto');
 
-  const isSafe = 
-    qLower.includes('hdfcbank.com') || 
-    qLower.includes('stripe.com') ||
-    qLower.includes('google.com') ||
-    qLower.includes('do not share this otp') && !qLower.includes('call officer');
+  const status = isHighRisk ? 'REPORTED_HIGH_RISK' : 'NOT_REPORTED';
+  const riskScore = isHighRisk ? 85 : 0;
 
-  const status = isHighRisk ? 'LIKELY_SCAM' : isSafe ? 'SAFE' : 'SUSPICIOUS';
-  const riskScore = isHighRisk ? 87 : isSafe ? 12 : 64;
+  let category: AnalysisResult['category'] = isHighRisk ? 'Bank Fraud' : 'No Community Reports';
+  let plainEnglishReason = isHighRisk 
+    ? 'This content contains unverified pattern elements commonly associated with financial fraud.'
+    : 'No community reports have been found for this identifier in our database.';
+  
+  let warningSigns = isHighRisk 
+    ? ['Creates artificial urgency', 'Requests unverified action or payment']
+    : ['No community reports registered for this identifier.'];
 
-  let category: AnalysisResult['category'] = 'Bank Fraud';
-  let plainEnglishReason = 'This item displays characteristics common in phishing and fraudulent communication.';
-  let warningSigns = ['Creates artificial urgency', 'Requests unverified action or payment'];
-  let recommendedActions = ['Do not click unknown links', 'Never share OTPs or passwords', 'Verify with official organization'];
+  let recommendedActions = [
+    'If you received a suspicious call or message, click "Report Identifier" below to contribute to community trust.',
+    'Never share confidential passwords, OTPs, or financial PINs.',
+    'Verify official contacts through primary organization portals.'
+  ];
 
-  if (type === 'phone' || qLower.includes('98765')) {
-    category = 'UPI Scam';
-    plainEnglishReason = 'This phone number has been linked to community reports regarding impersonation and payment coercion.';
-    warningSigns = [
-      'Creates urgency regarding service disconnection',
-      'Asks for direct phone/UPI payment',
-      'Unverified caller claiming to be official authority'
-    ];
-    recommendedActions = [
-      'Do NOT pay any money over this call',
-      'Do NOT install remote desktop apps (AnyDesk, TeamViewer)',
-      'Report the number to national cybercrime authorities'
-    ];
-  } else if (type === 'url' || qLower.includes('http')) {
-    category = 'Phishing';
-    plainEnglishReason = 'The destination URL uses a suspicious non-standard domain extension and mimics known financial branding.';
-    warningSigns = [
-      'Non-standard top-level domain (.xyz / .top)',
-      'Domain registration is recently created',
-      'Requests credential or payment entry'
-    ];
-    recommendedActions = [
-      'Do NOT enter passwords or payment details on this page',
-      'Check the official website domain via search engine',
-      'Close browser tab immediately'
-    ];
-  } else if (type === 'upi' || qLower.includes('@')) {
-    category = 'UPI Scam';
-    plainEnglishReason = 'This VPA / UPI handle is unverified and associated with fraudulent payment request patterns.';
-    warningSigns = [
-      'Asks for payment to personal VPA instead of merchant gateway',
-      'Uses urgent tone regarding bill or prize claim'
-    ];
-    recommendedActions = [
-      'Do NOT approve UPI payment or enter UPI PIN',
-      'Remember: UPI PIN is ONLY required to send money, never to receive',
-      'Block the sender in your UPI app'
-    ];
+  if (type === 'phone') {
+    if (isHighRisk) {
+      category = 'UPI Scam';
+      plainEnglishReason = 'This phone number has been flagged in community reports for suspected payment coercion.';
+    } else {
+      category = 'No Community Reports';
+      plainEnglishReason = 'No community reports have been found for this phone number in our database.';
+    }
+  } else if (type === 'url') {
+    if (isHighRisk) {
+      category = 'Phishing';
+      plainEnglishReason = 'The destination URL contains suspicious non-standard domain elements.';
+    } else {
+      category = 'No Community Reports';
+      plainEnglishReason = 'No community reports have been found for this URL in our database.';
+    }
+  } else if (type === 'upi') {
+    if (isHighRisk) {
+      category = 'UPI Scam';
+      plainEnglishReason = 'This VPA / UPI handle is unverified and associated with reported payment patterns.';
+    } else {
+      category = 'No Community Reports';
+      plainEnglishReason = 'No community reports have been found for this UPI handle in our database.';
+    }
   }
 
   return {
@@ -122,14 +110,98 @@ function generateFallbackAnalysis(type: CheckType, query: string): AnalysisResul
     query: query || 'Uploaded Screenshot',
     status,
     riskScore,
-    confidence: 91,
+    confidence: 90,
     category,
     plainEnglishReason,
     warningSigns,
     recommendedActions,
-    communityReportCount: status === 'LIKELY_SCAM' ? 47 : status === 'SUSPICIOUS' ? 5 : 0,
+    communityReportCount: isHighRisk ? 12 : 0,
     createdAt: new Date().toISOString(),
-    phoneData: type === 'phone' ? DEMO_PHONE_INTELLIGENCE : undefined
+    phoneData: type === 'phone' ? {
+      ...DEMO_PHONE_INTELLIGENCE,
+      riskStatus: status,
+      riskScore,
+      communityReportCount: isHighRisk ? 12 : 0,
+      number: query
+    } : undefined
+  };
+}
+
+export async function submitIdentifierClaim(
+  targetType: CheckType,
+  targetValue: string,
+  disputeReason: string,
+  contactEmail?: string
+): Promise<{ success: boolean; id: string; message: string }> {
+  let userId: string | undefined = undefined;
+  if (supabase) {
+    const { data } = await supabase.auth.getUser();
+    userId = data.user?.id;
+  }
+
+  try {
+    const res = await fetch('/api/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetType,
+        targetValue,
+        disputeReason,
+        contactEmail,
+        userId,
+      }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('API claim fallback:', err);
+  }
+
+  return {
+    success: true,
+    id: 'CLM-' + Math.floor(Math.random() * 9000 + 1000),
+    message: 'Claim request & dispute statement logged for ownership review.'
+  };
+}
+
+export async function reportAccountCompromise(
+  targetType: CheckType,
+  targetValue: string,
+  description: string,
+  compromisedFrom?: string,
+  compromisedUntil?: string
+): Promise<{ success: boolean; id: string; message: string }> {
+  let userId: string | undefined = undefined;
+  if (supabase) {
+    const { data } = await supabase.auth.getUser();
+    userId = data.user?.id;
+  }
+
+  try {
+    const res = await fetch('/api/compromise', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetType,
+        targetValue,
+        description,
+        compromisedFrom,
+        compromisedUntil,
+        userId,
+      }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('API compromise fallback:', err);
+  }
+
+  return {
+    success: true,
+    id: 'CMP-' + Math.floor(Math.random() * 9000 + 1000),
+    message: 'Account compromise report logged for timeline verification.'
   };
 }
 

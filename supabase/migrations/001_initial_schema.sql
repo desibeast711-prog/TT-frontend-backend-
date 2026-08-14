@@ -182,6 +182,12 @@ ALTER TABLE public.scam_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.checks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.evidence ENABLE ROW LEVEL SECURITY;
 
+-- Explicitly revoke UPDATE and DELETE privileges on public scam tables from anon & authenticated roles
+REVOKE UPDATE, DELETE ON public.scam_reports FROM anon, authenticated;
+REVOKE UPDATE, DELETE ON public.scam_categories FROM anon, authenticated;
+REVOKE UPDATE, DELETE ON public.checks FROM anon, authenticated;
+REVOKE UPDATE, DELETE ON public.evidence FROM anon, authenticated;
+
 DROP POLICY IF EXISTS "Public profiles read" ON public.profiles;
 DROP POLICY IF EXISTS "Users update own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Public scam categories read" ON public.scam_categories;
@@ -193,14 +199,27 @@ DROP POLICY IF EXISTS "Public evidence read" ON public.evidence;
 DROP POLICY IF EXISTS "Anyone insert evidence" ON public.evidence;
 
 CREATE POLICY "Public profiles read" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Users update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Public scam categories read" ON public.scam_categories FOR SELECT USING (true);
+
+-- Anyone can view non-removed community reports
 CREATE POLICY "Public scam reports read" ON public.scam_reports FOR SELECT USING (status != 'removed');
-CREATE POLICY "Anyone insert scam report" ON public.scam_reports FOR INSERT WITH CHECK (true);
+
+-- Anyone can submit a scam report, but status MUST be 'community_report' on insert
+CREATE POLICY "Anyone insert scam report" ON public.scam_reports FOR INSERT WITH CHECK (
+  status = 'community_report' AND 
+  length(target_value) >= 2 AND 
+  target_type IN ('phone','url','email','upi','message','social_media','screenshot','other')
+);
+
 CREATE POLICY "Users view own checks" ON public.checks FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
-CREATE POLICY "Anyone insert check" ON public.checks FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone insert check" ON public.checks FOR INSERT WITH CHECK (
+  length(input_value) >= 1 AND
+  input_type IN ('text','screenshot','url','phone','email','upi','social_media')
+);
+
 CREATE POLICY "Public evidence read" ON public.evidence FOR SELECT USING (true);
-CREATE POLICY "Anyone insert evidence" ON public.evidence FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone insert evidence" ON public.evidence FOR INSERT WITH CHECK (length(file_url) > 5);
 
 --------------------------------------------------
 -- STEP 10: STORAGE BUCKET & POLICIES

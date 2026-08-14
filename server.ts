@@ -174,21 +174,38 @@ app.post('/api/check', async (req, res) => {
   let aiResult: any = null;
   if (ai) {
     try {
-      const promptText = `You are TrulyTrue, a consumer Trust Intelligence platform.
-Evaluate this input item for scam, fraud, phishing, or security risks.
+      const promptText = `You are TrulyTrue, a decision-support Consumer Trust Intelligence platform.
+Evaluate this input item for fraud risk signals or community report patterns.
 Type of check: ${type}
 Input content: "${query}"
 Normalized value: "${normalized}"
 Known database community reports count: ${dbStats.totalCount}
 
+CRITICAL DECISION-SUPPORT & COMMUNITY TRUST RULES:
+1. NEVER use the words "SAFE", "TRUSTED", "LEGITIMATE", "SCAMMER", or "CRIMINAL".
+2. If Known database community reports count is 0:
+   Unless the content explicitly contains severe active scam threats (e.g. "urgent disconnect electricity", "send money to unlock account", "download APK", "digital arrest warrant"), you MUST return:
+   - status: "NOT_REPORTED"
+   - riskScore: 0
+   - category: "No Community Reports"
+   - plainEnglishReason: "No community reports have been found for this identifier in our database."
+3. If Known database community reports count is 1:
+   - status: "REPORTED"
+   - riskScore: 40
+   - plainEnglishReason: "This identifier has been reported in 1 community report for suspected fraud. Exercise caution and independently verify before sending money."
+4. If Known database community reports count is 2 or more:
+   - status: "REPORTED" or "REPORTED_HIGH_RISK"
+   - riskScore: between 60 and 95 based on report count and pattern severity
+   - plainEnglishReason: "This identifier has been reported in ${dbStats.totalCount} community reports for suspected fraud. Exercise caution and verify through official channels."
+
 Return a strict structured JSON response with:
-- status: "SAFE", "SUSPICIOUS", or "LIKELY_SCAM"
-- riskScore: integer between 0 and 100 (0=Completely Safe, 100=Definite Active Scam)
+- status: "NOT_REPORTED", "REPORTED", or "REPORTED_HIGH_RISK"
+- riskScore: integer between 0 and 100
 - confidence: number between 0.0 and 1.0 (e.g. 0.94)
-- category: Scam category name (e.g., "Bank Fraud", "UPI Scam", "Phishing", "Fake Customer Support", "Investment Scam", "Fake Job Offer", "Delivery Scam", "Digital Arrest", "Safe Communication")
-- plainEnglishReason: A 1-2 sentence clear, empathetic explanation in plain English without technical jargon.
-- warningSigns: Array of 2 to 4 specific bullet points detailing specific red flags.
-- recommendedActions: Array of 3 specific, actionable advice for the user (e.g. "Do not click link", "Do not share OTP").
+- category: Scam category name or "No Community Reports"
+- plainEnglishReason: A 1-2 sentence decision-support explanation.
+- warningSigns: Array of 2 to 4 bullet points.
+- recommendedActions: Array of 3 specific advice points.
 `;
 
       let contentsInput: any = promptText;
@@ -204,14 +221,14 @@ Return a strict structured JSON response with:
       }
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
         contents: contentsInput,
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              status: { type: Type.STRING, enum: ['SAFE', 'SUSPICIOUS', 'LIKELY_SCAM'] },
+              status: { type: Type.STRING, enum: ['NOT_REPORTED', 'REPORTED', 'REPORTED_HIGH_RISK'] },
               riskScore: { type: Type.INTEGER },
               confidence: { type: Type.NUMBER },
               category: { type: Type.STRING },
@@ -240,68 +257,73 @@ Return a strict structured JSON response with:
     }
   }
 
-  // 3. Fallback heuristic intelligence if AI unavailable
+  // 3. Fallback heuristic intelligence if AI unavailable or overrides needed
+  const qLower = (query || '').toLowerCase();
+  const hasSevereKeywords =
+    qLower.includes('urgent disconnect') ||
+    qLower.includes('electricity bill') ||
+    qLower.includes('customs clearance') ||
+    qLower.includes('apk download') ||
+    qLower.includes('lottery prize') ||
+    qLower.includes('.xyz/') ||
+    qLower.includes('digital arrest');
+
   if (!aiResult) {
-    const qLower = query.toLowerCase();
-    const isHighRisk =
-      dbStats.totalCount > 0 ||
-      qLower.includes('urgent') ||
-      qLower.includes('disconnect') ||
-      qLower.includes('electricity') ||
-      qLower.includes('customs') ||
-      qLower.includes('top/track') ||
-      qLower.includes('98765') ||
-      qLower.includes('.xyz') ||
-      qLower.includes('.top') ||
-      qLower.includes('ybl') ||
-      qLower.includes('90off');
+    if (dbStats.totalCount === 0 && !hasSevereKeywords) {
+      aiResult = {
+        status: 'NOT_REPORTED',
+        riskScore: 0,
+        confidence: 0.95,
+        category: 'No Community Reports',
+        plainEnglishReason: 'No community reports have been found for this identifier in our database.',
+        warningSigns: ['No community reports registered for this identifier.'],
+        recommendedActions: [
+          'If you received a suspicious message from this contact, click "Report Identifier" below to contribute to community trust.',
+          'Never share confidential passwords, OTPs, or financial PINs with callers.',
+          'Verify official numbers from trusted company websites.',
+        ],
+      };
+    } else {
+      const isHighRisk = dbStats.totalCount >= 5 || hasSevereKeywords;
+      const status = isHighRisk ? 'REPORTED_HIGH_RISK' : 'REPORTED';
+      const riskScore = dbStats.totalCount > 5 ? 90 : dbStats.totalCount > 0 ? 55 : isHighRisk ? 75 : 0;
 
-    const isSafe =
-      dbStats.totalCount === 0 &&
-      (qLower.includes('hdfcbank.com') ||
-        qLower.includes('stripe.com') ||
-        qLower.includes('google.com'));
-
-    const status = isHighRisk ? 'LIKELY_SCAM' : isSafe ? 'SAFE' : 'SUSPICIOUS';
-    const riskScore = dbStats.totalCount > 5 ? 92 : isHighRisk ? 87 : isSafe ? 10 : 58;
-
-    aiResult = {
-      status,
-      riskScore,
-      confidence: 0.88,
-      category: isHighRisk ? 'Bank Fraud' : isSafe ? 'Safe Communication' : 'Unverified Origin',
-      plainEnglishReason: isHighRisk
-        ? 'This item displays pattern indicators linked to urgent financial requests, unauthorized VPAs, or deceptive domains.'
-        : isSafe
-        ? 'This target originates from an authenticated, legitimate domain or official communication channel.'
-        : 'This item contains unverified elements that require caution before taking action.',
-      warningSigns: isHighRisk
-        ? [
-            'Creates artificial urgency or threat of immediate action',
-            'Requests direct payment, PIN entry, or remote app installation',
-            'Domain or phone number is unverified',
-          ]
-        : ['Unverified sender handle or web link'],
-      recommendedActions: isHighRisk
-        ? [
-            'Do NOT click any included links or download attachments',
-            'Never share OTPs, passwords, or UPI PINs',
-            'Verify through official website channels directly',
-          ]
-        : ['Confirm sender identity through official channels'],
-    };
+      aiResult = {
+        status,
+        riskScore,
+        confidence: 0.88,
+        category: isHighRisk ? 'Bank Fraud' : 'Suspected Fraud',
+        plainEnglishReason: dbStats.totalCount > 0
+          ? `This identifier has been reported in ${dbStats.totalCount} community report(s) for suspected fraud. Exercise caution.`
+          : 'This content contains unverified pattern elements.',
+        warningSigns: isHighRisk
+          ? ['Reported by community members or contains suspicious urgency patterns']
+          : ['Community reports logged for this identifier.'],
+        recommendedActions: [
+          'Never share OTPs, PINs, or sensitive banking details.',
+          'Independently verify sender identity through official channels.',
+        ],
+      };
+    }
   }
 
-  // Adjust risk status if database has high community report count
+  // Enforce zero community report rule for plain numbers/UPIs/URLs/emails if no severe keyword is present
   let finalStatus = aiResult.status;
   let finalRiskScore = aiResult.riskScore;
 
-  if (dbStats.totalCount >= 5 && finalStatus === 'SAFE') {
-    finalStatus = 'SUSPICIOUS';
-    finalRiskScore = Math.max(finalRiskScore, 65);
-  } else if (dbStats.totalCount >= 10) {
-    finalStatus = 'LIKELY_SCAM';
-    finalRiskScore = Math.max(finalRiskScore, 85);
+  if (dbStats.totalCount === 0 && !hasSevereKeywords && (type === 'phone' || type === 'email' || type === 'upi' || type === 'url')) {
+    finalStatus = 'NOT_REPORTED';
+    finalRiskScore = 0;
+    aiResult.category = 'No Community Reports';
+    aiResult.plainEnglishReason = 'No community reports have been found for this identifier in our database.';
+  } else if (dbStats.totalCount === 1) {
+    finalStatus = 'REPORTED';
+    finalRiskScore = Math.max(finalRiskScore, 40);
+    aiResult.plainEnglishReason = `This identifier has been reported in 1 community report for suspected fraud. Please exercise caution.`;
+  } else if (dbStats.totalCount >= 2) {
+    finalStatus = dbStats.totalCount >= 5 ? 'REPORTED_HIGH_RISK' : 'REPORTED';
+    finalRiskScore = Math.max(finalRiskScore, Math.min(95, 50 + dbStats.totalCount * 8));
+    aiResult.plainEnglishReason = `This identifier has been reported in ${dbStats.totalCount} community reports for suspected fraud. Exercise caution and verify through official channels.`;
   }
 
   const resultPayload = {
@@ -605,6 +627,113 @@ app.post('/api/report', async (req, res) => {
   });
 });
 
+// POST "Claim This Identifier" (Dispute / Owner Verification Architecture)
+app.post('/api/claim', async (req, res) => {
+  const { targetType, targetValue, disputeReason, contactEmail, userId } = req.body;
+  if (!targetValue || !disputeReason) {
+    return res.status(400).json({ error: 'Target identifier and dispute statement are required.' });
+  }
+
+  const normalized = normalizeTarget(targetType || 'phone', targetValue);
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('identifier_claims')
+        .insert({
+          target_type: targetType || 'phone',
+          target_value: targetValue,
+          normalized_value: normalized,
+          claimed_by_user_id: userId || null,
+          dispute_reason: disputeReason,
+          verification_status: 'PENDING_VERIFICATION'
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        // Also update scam_reports to record owner_disputed = true without deleting community reports
+        await supabase
+          .from('scam_reports')
+          .update({
+            owner_disputed: true,
+            owner_response: disputeReason,
+            status: 'DISPUTED'
+          })
+          .eq('normalized_value', normalized);
+
+        return res.json({
+          success: true,
+          id: data.id,
+          message: 'Claim request submitted successfully. The identifier is marked as Disputed / Under Review without removing community reports.'
+        });
+      }
+    } catch (err) {
+      console.warn('Supabase claim insert error:', err);
+    }
+  }
+
+  return res.json({
+    success: true,
+    id: 'CLM-' + Math.floor(Math.random() * 9000 + 1000),
+    message: 'Claim & dispute received. Marked for ownership review.'
+  });
+});
+
+// POST Account Compromise Declaration (Separate from Scam Reports)
+app.post('/api/compromise', async (req, res) => {
+  const { targetType, targetValue, compromisedFrom, compromisedUntil, description, userId } = req.body;
+  if (!targetValue || !description) {
+    return res.status(400).json({ error: 'Target identifier and compromise details are required.' });
+  }
+
+  const normalized = normalizeTarget(targetType || 'phone', targetValue);
+
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('account_compromises')
+        .insert({
+          target_type: targetType || 'phone',
+          target_value: targetValue,
+          normalized_value: normalized,
+          reported_by_owner_id: userId || null,
+          compromised_from: compromisedFrom || null,
+          compromised_until: compromisedUntil || null,
+          description,
+          status: 'REPORTED'
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        // Update scam_reports flag for compromise
+        await supabase
+          .from('scam_reports')
+          .update({
+            is_compromised: true,
+            compromised_at: compromisedFrom || new Date().toISOString()
+          })
+          .eq('normalized_value', normalized);
+
+        return res.json({
+          success: true,
+          id: data.id,
+          message: 'Account compromise declaration logged successfully.'
+        });
+      }
+    } catch (err) {
+      console.warn('Supabase compromise insert error:', err);
+    }
+  }
+
+  return res.json({
+    success: true,
+    id: 'CMP-' + Math.floor(Math.random() * 9000 + 1000),
+    message: 'Compromise report logged for ownership timeline audit.'
+  });
+});
+
 // API-ready LLM analysis endpoint
 app.post('/api/analyze', async (req, res) => {
   const { content, type = 'text' } = req.body;
@@ -613,7 +742,7 @@ app.post('/api/analyze', async (req, res) => {
   if (ai) {
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
         contents: `Analyze this content for potential fraud or scam signals:\nType: ${type}\nContent: "${content}"`,
       });
       return res.json({ analysis: response.text });

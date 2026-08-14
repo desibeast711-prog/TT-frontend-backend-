@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CommunityReport, CommunityReportStatus } from '../types';
+import { CommunityReport, CommunityReportLifecycle } from '../types';
 import { getCommunityReports } from '../services/api';
 import { ShieldCheck, Filter, ThumbsUp, AlertCircle, FileText, MapPin, Loader2 } from 'lucide-react';
 
@@ -25,12 +25,17 @@ export const CommunitySection: React.FC<CommunitySectionProps> = ({
     }
   }, [reports]);
 
-  const statusBadgeStyles: Record<CommunityReportStatus, string> = {
+  const statusBadgeStyles: Record<CommunityReportLifecycle | string, string> = {
+    'NEW': 'bg-neutral-100 text-neutral-800 border-neutral-300',
+    'UNDER_REVIEW': 'bg-amber-100 text-amber-800 border-amber-300',
+    'SUPPORTED': 'bg-blue-100 text-blue-800 border-blue-300',
+    'CORROBORATED': 'bg-amber-200 text-amber-900 border-amber-400',
+    'RESOLVED': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'DISPUTED': 'bg-purple-100 text-purple-800 border-purple-300',
+    'REMOVED': 'bg-red-100 text-red-800 border-red-300',
     'Community Report': 'bg-neutral-100 text-neutral-800 border-neutral-300',
     'Under Review': 'bg-amber-100 text-amber-800 border-amber-300',
     'Verified': 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    'Disputed': 'bg-purple-100 text-purple-800 border-purple-300',
-    'Removed': 'bg-red-100 text-red-800 border-red-300',
   };
 
   const filteredReports = reportList.filter((rep) => {
